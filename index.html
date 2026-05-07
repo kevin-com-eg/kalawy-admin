@@ -945,10 +945,23 @@ async function addTeacher(){
   toast('s',`تم إضافة المدرس "${name}"`);renderTeachers();
 }
 async function delTeacher(id,name){
-  const ok=await confirmDel(`حذف المدرس "${name}"؟`);if(!ok)return;
-  await sb.from('teacher_subjects').delete().eq('teacher_id',id);
-  await sb.from('teachers').delete().eq('id',id);
-  toast('s','تم الحذف');renderTeachers();
+  const ok=await confirmDel(`حذف المدرس "${name}"؟\n\nسيختفي من قائمة المدرسين ومن اختيار مادة الشابتر، ولن يستطيع الدخول كمدرس.`);
+  if(!ok)return;
+
+  const btn = event?.currentTarget;
+  if(btn){ btn.innerHTML='<span class="ld"></span>'; btn.disabled=true; }
+
+  // الحذف الحقيقي يتم من Supabase RPC عشان RLS/FK ما يمنعوش الحذف بصمت
+  const { data, error } = await sb.rpc('delete_teacher_safe', { p_teacher_id: id });
+
+  if(btn){ btn.textContent='حذف'; btn.disabled=false; }
+  if(error){
+    toast('e','فشل حذف المدرس: ' + error.message);
+    return;
+  }
+
+  toast('s','تم حذف المدرس');
+  await renderTeachers();
 }
 
 // ── ADMIN CHAPTERS ──────────────────────────────────────────────────────────
