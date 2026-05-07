@@ -576,7 +576,10 @@ function setContent(html){document.getElementById('mainContent').innerHTML=html;
 
 // ── IMAGE UPLOAD to Supabase Storage ──────────────────────────────────────
 async function uploadImage(file, folder='general', progressBarId=null) {
-  const ext = file.name.split('.').pop().toLowerCase();
+  if(!file) return null;
+  if(!file.type.startsWith('image/')) throw new Error('الملف لازم يكون صورة');
+  if(file.size > 5 * 1024 * 1024) throw new Error('حجم الصورة كبير — الحد 5MB');
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).substr(2,8)}.${ext}`;
   let animId = null;
   if(progressBarId) {
@@ -695,7 +698,7 @@ async function addSubject(){
     try{
       document.getElementById('sub-img-prog').style.display='block';
       img_url=await uploadImage(file,'subjects','sub-img-bar');
-    }catch(e){toast('w','فشل رفع الصورة — سيتم الحفظ بدونها');}
+    }catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}
   }
   const{error}=await sb.from('subjects').insert({name_ar:name,grade_id:parseInt(grade),image_url:img_url});
   btn.textContent='إضافة المادة';btn.disabled=false;
@@ -782,7 +785,7 @@ async function addTeacher(){
   let img_url=null;
   if(file){
     try{document.getElementById('tch-img-prog').style.display='block';img_url=await uploadImage(file,'teachers','tch-img-bar');}
-    catch(e){toast('w','فشل رفع الصورة');}
+    catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}
   }
   await sb.from('profiles').insert({id:uid,full_name:name,role:'teacher',email,image_url:img_url});
   await sb.from('teachers').insert({id:uid,bio:bio||null});
@@ -865,7 +868,7 @@ async function addChapter(){
   let img_url=null;
   if(file){
     try{document.getElementById('ch-img-prog').style.display='block';img_url=await uploadImage(file,'chapters','ch-img-bar');}
-    catch(e){toast('w','فشل رفع الصورة');}
+    catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}
   }
   const{error}=await sb.from('chapters').insert({subject_id:sid,teacher_id:tid,title,description:desc||null,image_url:img_url,created_by:'admin'});
   btn.textContent='إضافة الشابتر';btn.disabled=false;
@@ -966,7 +969,7 @@ async function addLesson(){
   let img_url=null;
   if(file){
     try{document.getElementById('ls-img-prog').style.display='block';img_url=await uploadImage(file,'lessons','ls-img-bar');}
-    catch(e){toast('w','فشل رفع الصورة');}
+    catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}
   }
   const{error}=await sb.from('lessons').insert({chapter_id:chId,title,code,scheduled_at:time||null,description:desc||null,is_active:false,image_url:img_url});
   btn.textContent='إضافة الحصة';btn.disabled=false;
@@ -1099,7 +1102,7 @@ async function addMyChapter(){
   let img_url=null;
   if(file){
     try{document.getElementById('mch-img-prog').style.display='block';img_url=await uploadImage(file,'chapters','mch-img-bar');}
-    catch(e){toast('w','فشل رفع الصورة');}
+    catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}
   }
   const{error}=await sb.from('chapters').insert({subject_id:sid,teacher_id:ME.id,title,description:desc||null,image_url:img_url,created_by:'teacher'});
   btn.textContent='إضافة الشابتر';btn.disabled=false;
@@ -1192,7 +1195,7 @@ async function addMyLesson(){
   const btn=document.getElementById('mls-btn');
   btn.innerHTML='<span class="ld"></span>';btn.disabled=true;
   let img_url=null;
-  if(file){try{document.getElementById('mls-img-prog').style.display='block';img_url=await uploadImage(file,'lessons','mls-img-bar');}catch(e){toast('w','فشل رفع الصورة');}}
+  if(file){try{document.getElementById('mls-img-prog').style.display='block';img_url=await uploadImage(file,'lessons','mls-img-bar');}catch(e){toast('w','فشل رفع الصورة: '+(e.message||'راجع Storage policy'));}}
   const{error}=await sb.from('lessons').insert({chapter_id:chId,title,code,scheduled_at:time||null,description:desc||null,is_active:false,image_url:img_url});
   btn.textContent='إضافة الحصة';btn.disabled=false;
   if(error)return toast('e',error.message.includes('unique')?'الكود ده موجود':error.message);
@@ -1263,7 +1266,7 @@ async function delVideoPart(id){
 // EXAM BUILDER
 async function loadExamBuilder(){
   // check if exam exists for this lesson
-  const{data:ex}=await sb.from('exams').select('id,title,duration_minutes,scheduled_at').eq('lesson_id',_activeLessonId).single();
+  const{data:ex}=await sb.from('exams').select('id,title,duration_minutes,scheduled_at').eq('lesson_id',_activeLessonId).maybeSingle();
   if(ex){
     _examId=ex.id;
     document.getElementById('ex-title').value=ex.title||'';
@@ -1370,7 +1373,7 @@ async function addQuestion(){
     try{
       document.getElementById('q-img-prog').style.display='block';
       qImgUrl=await uploadImage(qImgFile,'exam-questions','q-img-bar');
-    }catch(e){toast('w','فشل رفع صورة السؤال');}
+    }catch(e){toast('w','فشل رفع صورة السؤال: '+(e.message||'راجع Storage policy'));}
   }
 
   // get next sort_order
@@ -1382,8 +1385,8 @@ async function addQuestion(){
     exam_id:_examId,
     question_text:qText,
     image_url:qImgUrl,
-    options:JSON.stringify(_options),
-    correct_option:'a', // kept for compat, actual answer in options jsonb
+    options:_options.map(o=>({text:o.text.trim(),is_correct:!!o.is_correct})),
+    correct_option:String.fromCharCode(97 + _options.findIndex(o=>o.is_correct)), // legacy fallback
     sort_order:nextOrder,
     option_a:_options[0]?.text||'',
     option_b:_options[1]?.text||'',
